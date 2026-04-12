@@ -1,0 +1,52 @@
+{
+  "description": "Labels, values, and comments that must never appear in cells written by the xlsx skill. validate_xlsx.py flags any match as a slop hit.",
+  "case_insensitive": true,
+  "whole_word": true,
+  "terms": [
+    "TBD",
+    "TK",
+    "TBA",
+    "FIXME",
+    "XXX",
+    "[INSERT]",
+    "[PLACEHOLDER]",
+    "???",
+    "N/A yet",
+    "coming soon",
+    "revolutionary",
+    "groundbreaking",
+    "cutting-edge",
+    "state-of-the-art",
+    "innovative",
+    "disruptive",
+    "game-changing",
+    "world-class",
+    "best-in-class",
+    "next-generation",
+    "unprecedented",
+    "seamlessly",
+    "leverage synergies",
+    "paradigm shift",
+    "blue-sky thinking",
+    "low-hanging fruit",
+    "move the needle",
+    "circle back",
+    "Lorem ipsum",
+    "test test",
+    "asdf",
+    "qwerty"
+  ],
+  "soft_terms": [
+    "approximately",
+    "about",
+    "roughly",
+    "we believe",
+    "seems to",
+    "potentially",
+    "may or may not"
+  ],
+  "notes": {
+    "hard_vs_soft": "terms = immediate fail. soft_terms = warning only, intended for cell comments and assumption notes; permitted when followed by a quantified range (e.g., 'approximately 5-7%').",
+    "on_synergy_and_leverage": "Unquantified 'synergy' or 'leverage' is forbidden. Quantified usage like 'revenue synergy of $3.5mm (2.8% uplift)' is allowed."
+  }
+}

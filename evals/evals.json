@@ -1,0 +1,86 @@
+{
+  "skill_name": "xlsx",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a 3-year financial model for a SaaS startup. Year 1: $500K revenue, 40% growth rate. Include revenue, COGS (30% of revenue), gross profit, OpEx ($200K flat), EBITDA, and a revenue growth chart. Save to /tmp/saas_model.xlsx",
+      "expected_output": "An Excel file is created via build_xlsx.new_workbook(theme='ib') with a properly structured financial model using Excel formulas (not hardcoded values), ib-theme typography, and zero formula errors.",
+      "files": [],
+      "expectations": [
+        "Uses build_xlsx.new_workbook(theme='ib') as the entry point (not raw openpyxl.Workbook)",
+        "Revenue projections use Excel growth formulas like =B5*(1+$B$6) referencing assumption cells",
+        "All cells are written via write_table / write_section_header / write_title_banner (no raw Font/PatternFill)",
+        "save_and_validate() is called instead of wb.save() and the returned report has status=='pass' and slop_score<=10",
+        "The resulting file has Arial 10 body, hidden gridlines, and a non-default sheet tab name"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I have a sales data file at /data/sales_2025.xlsx with columns: Date, Region, Product, Units, UnitPrice. Analyze it: give me total revenue by region, top 5 products by units sold, and monthly revenue trend. Show the results.",
+      "expected_output": "pandas is used to load and analyze the Excel data, producing aggregated statistics by region, a top-5 product ranking, and a monthly trend summary displayed clearly to the user.",
+      "files": [],
+      "expectations": [
+        "Uses pandas pd.read_excel() to load the file",
+        "Computes total revenue (Units * UnitPrice) grouped by Region",
+        "Identifies top 5 products by total Units sold",
+        "Computes monthly revenue trend by resampling or grouping by month",
+        "Presents results in a readable format (table or summary)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Add a new sheet called 'Assumptions' to /tmp/existing_model.xlsx with the following parameters: Revenue Growth Rate = 15%, Discount Rate = 10%, Tax Rate = 25%. Use the theme's input styling for cells that need user attention. Don't break the existing sheets.",
+      "expected_output": "openpyxl loads the existing workbook, build_xlsx.apply_theme+new_sheet adds a new 'Assumptions' sheet whose value cells use the theme input style, and the save_and_validate() pipeline passes without modifying existing sheets.",
+      "files": [],
+      "expectations": [
+        "Uses openpyxl load_workbook() to open the existing file without data_only=True",
+        "Calls theme.apply_theme(wb, 'ib') before touching content so named styles are available",
+        "Creates a new sheet named 'Assumptions' via build_xlsx.new_sheet",
+        "Assumption value cells use style_name('ib','input') (blue Macabacus text, right-aligned, numeric format)",
+        "save_and_validate() returns status=='pass'",
+        "Existing sheets in the workbook are preserved unchanged"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Build a SaaS product metrics dashboard at /tmp/saas_dash.xlsx using theme='saas'. Include a KPI band with 4 cards (MRR, Active Users, Churn, NPS) and a weekly trend table. Verify it passes validate_xlsx.py.",
+      "expected_output": "build_xlsx.new_workbook(theme='saas') is used, write_kpi_band draws the 4 cards, write_table draws the weekly trend, and save_and_validate returns status='pass' with slop_score<=10.",
+      "files": [],
+      "expectations": [
+        "new_workbook(theme='saas') is called (not ib)",
+        "The file uses the saas palette (indigo #6366F1 accent, slate ink #0F172A, emerald #10B981)",
+        "KPI band is created via write_kpi_band with 4 tuples",
+        "Weekly trend uses write_table with a formula column (net = new - churn)",
+        "save_and_validate returns status='pass'",
+        "validate_xlsx.py reports theme-appropriate body font (Aptos) on content cells"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Build a 3-statement financial model from templates/financial-model-skeleton.xlsx. Populate Assumptions with starting ARR $15mm, growth rates 45/35/30/25%, margins 72/74/75/76/77%, OpEx ratio 65/58/52/48/45%. Save to /tmp/3stmt.xlsx and ensure no forbidden terms and zero style violations.",
+      "expected_output": "build_xlsx.load_template('financial-model-skeleton', theme='ib') loads the skeleton, Assumptions cells are filled with numeric values (not strings), save_and_validate passes with zero formula errors and zero forbidden-term hits.",
+      "files": [],
+      "expectations": [
+        "load_template('financial-model-skeleton', theme='ib') is used",
+        "Only pre-existing Assumptions cells are written (no new ad-hoc sheets)",
+        "No forbidden terms like 'TBD', 'revolutionary', or 'cutting-edge' appear in any cell",
+        "save_and_validate() returns status='pass', slop_score<=10, and recalc.status=='success'",
+        "The saved file still has the skeleton's tab colors, freeze panes, and title banner intact"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Create an engineering parameter sheet at /tmp/e101.xlsx using theme='engineering' for heat exchanger E-101. Include Design pressure 35 bar(g), Design temperature 150°C, Flow rate 12000 kg/h, with a Spec/Actual/Delta pattern and SI unit column. Validate the output.",
+      "expected_output": "new_workbook(theme='engineering') is used, write_section_header + write_table produce a parameter table with a Unit column, and save_and_validate returns status='pass'.",
+      "files": [],
+      "expectations": [
+        "new_workbook(theme='engineering') is the entry point",
+        "The body font on content cells is Consolas (engineering theme)",
+        "Headers follow the Calibri 11 bold pattern from the engineering theme",
+        "A 'Unit' column is present between the label and the Spec column",
+        "Delta column contains an Excel formula like =E{i}-D{i}",
+        "save_and_validate() returns status='pass' with slop_score<=10"
+      ]
+    }
+  ]
+}
