@@ -7,8 +7,8 @@
         "npx",
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "C:\\Users\\username\\Desktop",
-        "C:\\path\\to\\other\\allowed\\dir"
+        "C:\\ABSOLUTE\\PATH\\TO\\INPUT_DIR",
+        "C:\\ABSOLUTE\\PATH\\TO\\OUTPUT_DIR"
       ]
     }
   }

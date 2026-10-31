@@ -16,7 +16,20 @@ generated workbooks should land.
 | macOS / Linux | [`filesystem.macos-linux.json`](./filesystem.macos-linux.json) | `npx` is resolved on `PATH`; no shell wrapper needed |
 | Windows | [`filesystem.windows.json`](./filesystem.windows.json) | `npx` is a `.cmd` shim, so it must be launched through `cmd /c`; paths use backslashes (escaped as `\\` in JSON) |
 
-Replace the placeholder paths before use. Mixing the two (a `cmd /c` launcher with
+### Replace the placeholders
+
+JSON has no comments, so placeholders are written in capitals. Swap each one for a real,
+absolute directory that already exists (the server exits at startup if a root is missing):
+
+| Placeholder | Replace with | Example (macOS) | Example (Windows) |
+|-------------|--------------|-----------------|-------------------|
+| `INPUT_DIR` | Folder holding source data (CSV, exports, existing `.xlsx`) | `/Users/alex/Finance/Data` | `C:\\Users\\alex\\Finance\\Data` |
+| `OUTPUT_DIR` | Folder where generated workbooks should land | `/Users/alex/Finance/Reports` | `C:\\Users\\alex\\Finance\\Reports` |
+
+One folder can serve both roles; delete the extra line in that case, or add more lines for
+more roots. On Linux, home folders live under `/home/<user>`, not `/Users`.
+
+Mixing the two (a `cmd /c` launcher with
 `/Users/...` paths) silently fails on both platforms: Windows has no `/Users` tree and
 macOS has no `cmd`.
 

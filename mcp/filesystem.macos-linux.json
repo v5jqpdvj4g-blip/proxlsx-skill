@@ -5,8 +5,8 @@
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "/Users/username/Desktop",
-        "/path/to/other/allowed/dir"
+        "/ABSOLUTE/PATH/TO/INPUT_DIR",
+        "/ABSOLUTE/PATH/TO/OUTPUT_DIR"
       ]
     }
   }
