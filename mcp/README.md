@@ -21,7 +21,7 @@ generated workbooks should land.
 JSON has no comments, so placeholders are written in capitals. Swap each one for a real,
 absolute directory that already exists (the server exits at startup if a root is missing):
 
-| Placeholder | Replace with | Example (macOS) | Example (Windows) |
+| Placeholder | Replace with | Example (macOS) | Example (Windows, as typed in JSON) |
 |-------------|--------------|-----------------|-------------------|
 | `INPUT_DIR` | Folder holding source data (CSV, exports, existing `.xlsx`) | `/Users/alex/Finance/Data` | `C:\\Users\\alex\\Finance\\Data` |
 | `OUTPUT_DIR` | Folder where generated workbooks should land | `/Users/alex/Finance/Reports` | `C:\\Users\\alex\\Finance\\Reports` |
@@ -29,9 +29,8 @@ absolute directory that already exists (the server exits at startup if a root is
 One folder can serve both roles; delete the extra line in that case, or add more lines for
 more roots. On Linux, home folders live under `/home/<user>`, not `/Users`.
 
-Mixing the two (a `cmd /c` launcher with
-`/Users/...` paths) silently fails on both platforms: Windows has no `/Users` tree and
-macOS has no `cmd`.
+Don't mix the two: a `cmd /c` launcher with `/Users/...` paths fails on both platforms,
+because Windows has no `/Users` tree and macOS has no `cmd`.
 
 ## Where to put it
 
