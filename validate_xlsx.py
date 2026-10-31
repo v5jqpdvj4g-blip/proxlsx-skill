@@ -28,6 +28,8 @@ import json
 import re
 import subprocess
 import sys
+import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +64,49 @@ def _load_forbidden() -> tuple[list[str], list[str], bool, bool]:
         bool(data.get("case_insensitive", True)),
         bool(data.get("whole_word", True)),
     )
+
+
+_SML_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+
+
+def _xfid_to_style_name(path: Path) -> dict[int, str]:
+    """
+    Map cellStyleXfs index -> NamedStyle name, read straight from styles.xml.
+
+    openpyxl's ``cell.style`` assumes xfId == position in <cellStyles>, which
+    only holds for files openpyxl itself wrote. Files re-saved by LibreOffice
+    (i.e. every file that went through recalc.py) or Excel carry extra
+    cellStyleXfs, so ``cell.style`` returns the wrong name or raises
+    IndexError. Resolve names from the real xfId instead.
+    """
+    try:
+        with zipfile.ZipFile(path) as z:
+            root = ET.fromstring(z.read("xl/styles.xml"))
+    except (KeyError, zipfile.BadZipFile, ET.ParseError):
+        return {}
+    out: dict[int, str] = {}
+    cs = root.find(f"{_SML_NS}cellStyles")
+    if cs is not None:
+        for el in cs.findall(f"{_SML_NS}cellStyle"):
+            try:
+                out.setdefault(int(el.get("xfId", "")), el.get("name", ""))
+            except ValueError:
+                continue
+    return out
+
+
+def _cell_style_name(cell: Cell, xf_names: dict[int, str]) -> str:
+    style = getattr(cell, "_style", None)
+    xf_id = getattr(style, "xfId", 0) if style is not None else 0
+    return xf_names.get(xf_id, "Normal") or "Normal"
+
+
+def _iter_all_cells(ws: Worksheet):
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.value is None and cell.comment is None:
+                continue
+            yield cell
 
 
 def _iter_content_cells(ws: Worksheet):
@@ -113,10 +158,19 @@ def _cell_fill_argb(cell: Cell) -> str | None:
 def _build_forbidden_regex(terms: list[str], case_insensitive: bool, whole_word: bool) -> re.Pattern | None:
     if not terms:
         return None
-    escaped = [re.escape(t) for t in terms]
-    pat = "|".join(escaped)
-    if whole_word:
-        pat = rf"(?:(?<=\W)|^)(?:{pat})(?:(?=\W)|$)"
+    parts = []
+    for t in terms:
+        p = re.escape(t)
+        if whole_word:
+            # Only demand a boundary on a side that starts/ends with a word
+            # character. Terms like "???" or "[INSERT]" must still match when
+            # glued to text ("Value???"), which the old (?<=\W)|^ guard missed.
+            if re.match(r"\w", t):
+                p = r"(?<!\w)" + p
+            if re.search(r"\w$", t):
+                p = p + r"(?!\w)"
+        parts.append(p)
+    pat = "|".join(parts)
     flags = re.IGNORECASE if case_insensitive else 0
     return re.compile(pat, flags)
 
@@ -162,7 +216,7 @@ def _check_a1_not_empty(wb) -> dict:
     return {"pass": not empty, "offenders": empty}
 
 
-def _check_default_font(wb) -> dict:
+def _check_default_font(wb, xf_names: dict[int, str]) -> dict:
     """
     Flag Calibri 11 ONLY when the cell uses the built-in 'Normal' style (i.e.
     nothing theme-issued was applied). Calibri 11 inside a custom NamedStyle
@@ -174,7 +228,7 @@ def _check_default_font(wb) -> dict:
     for ws in wb.worksheets:
         for cell in _iter_content_cells(ws):
             count += 1
-            style_name = cell.style or "Normal"
+            style_name = _cell_style_name(cell, xf_names)
             if style_name != "Normal":
                 continue  # trust any non-Normal named style
             name, size = _cell_font_tuple(cell)
@@ -244,15 +298,21 @@ def _check_forbidden_terms(wb) -> dict:
     soft_re = _build_forbidden_regex(soft, ci, ww)
     hard_hits, soft_hits = [], []
 
+    def scan(where: str, text: str) -> None:
+        if hard_re and hard_re.search(text):
+            hard_hits.append(f"{where}: {text[:60]}")
+        elif soft_re and soft_re.search(text):
+            soft_hits.append(f"{where}: {text[:60]}")
+
+    # Scan every cell (column A included), cell comments and sheet names.
+    # The style checks skip the gutter column; the term firewall must not.
     for ws in wb.worksheets:
-        for cell in _iter_content_cells(ws):
-            v = cell.value
-            if not isinstance(v, str):
-                continue
-            if hard_re and hard_re.search(v):
-                hard_hits.append(f"{ws.title}!{cell.coordinate}: {v[:60]}")
-            elif soft_re and soft_re.search(v):
-                soft_hits.append(f"{ws.title}!{cell.coordinate}: {v[:60]}")
+        scan(f"sheet name {ws.title!r}", ws.title)
+        for cell in _iter_all_cells(ws):
+            if isinstance(cell.value, str):
+                scan(f"{ws.title}!{cell.coordinate}", cell.value)
+            if cell.comment is not None and cell.comment.text:
+                scan(f"{ws.title}!{cell.coordinate} (comment)", cell.comment.text)
 
     return {
         "pass": not hard_hits,
@@ -317,6 +377,7 @@ def lint(path: str | Path, *, run_recalc: bool = True) -> dict:
         return {"status": "fail", "error": f"no such file: {path}"}
 
     wb = load_workbook(path)
+    xf_names = _xfid_to_style_name(path)
 
     checks = {
         "gridlines_hidden":        _check_gridlines(wb),
@@ -324,7 +385,7 @@ def lint(path: str | Path, *, run_recalc: bool = True) -> dict:
         "tab_colors_set":          _check_tab_colors(wb),
         "freeze_panes_set":        _check_freeze_panes(wb),
         "a1_not_empty":            _check_a1_not_empty(wb),
-        "default_font_overridden": _check_default_font(wb),
+        "default_font_overridden": _check_default_font(wb, xf_names),
         "number_format_coverage":  _check_number_format_coverage(wb),
         "no_rainbow_fills":        _check_rainbow(wb),
         "borders_strategic":       _check_borders(wb),
@@ -335,7 +396,9 @@ def lint(path: str | Path, *, run_recalc: bool = True) -> dict:
     slop_score = _compute_slop_score(checks, forbidden)
     style_pass = all(c.get("pass", False) for c in checks.values())
     forbidden_pass = forbidden.get("pass", True)
-    recalc_pass = recalc.get("status") != "errors_found"
+    # A recalc that could not run (LibreOffice missing, timeout, crash) is not
+    # a pass: QA-2 was never checked. Use --no-recalc to skip it explicitly.
+    recalc_pass = recalc.get("skipped", False) or recalc.get("status") == "success"
 
     overall_pass = style_pass and forbidden_pass and recalc_pass
 

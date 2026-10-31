@@ -77,7 +77,9 @@ All four themes are registered in `theme.py`. `theme.py['ib']['palette']` is the
 | QA-3 | Style lint passes (`slop_score ≤ 10`)            | `validate_xlsx.py` via `save_and_validate()`|
 | QA-4 | No forbidden-term hits                            | `validate_xlsx.py` forbidden_terms section  |
 
-`save_and_validate()` chains all four and raises `RuntimeError` on any failure.
+`save_and_validate()` chains all four and raises `RuntimeError` on any failure. It fails closed: if LibreOffice is missing or the validator itself errors, `ok` is `False`. Pass `recalc=False` only when you deliberately skip QA-2.
+
+Mixed-unit tables: `write_table(..., num_format='currency', col_formats={'YoY Δ': 'percent_decimal'})` sets a per-column format so growth columns don't render as `$0`. Ratios on a total row should be recomputed from totals, not summed.
 
 ## Quick-start recipes
 
@@ -123,6 +125,8 @@ save_and_validate(wb, '/tmp/e101.xlsx')
 - `templates/*.xlsx` — 4 skeletons: financial-model, data-report, dashboard, engineering-sheet.
 - `templates/_build_templates.py` — regenerates the skeletons from `build_xlsx`.
 - `references/` — design-system specs, anti-slop checklist, number-format cookbook, sources.
+- `evals/run_evals.py` — executable checks for `evals/evals.json` plus one sample workbook per theme (`python evals/run_evals.py`).
+- `tests/` — regression tests (`python -m pytest tests`). CI runs both, with LibreOffice recalc.
 
 ---
 

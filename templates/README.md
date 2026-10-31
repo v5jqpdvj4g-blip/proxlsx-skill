@@ -27,7 +27,7 @@ Two-sheet layout for a data-pull deliverable.
 
 | Sheet      | What's in it                                                  |
 |------------|---------------------------------------------------------------|
-| `Report`   | Title banner + 3-row summary table with total row + formulas  |
+| `Report`   | Title banner + 3-row summary table (FY23–FY25, YoY Δ and 2-yr CAGR as % formulas) with total row |
 | `Raw Data` | Blank (paste raw data starting at row 2)                      |
 
 Edit the table body cells directly; totals recalc on save.
@@ -51,12 +51,12 @@ Single-sheet parameter table for EPC workflows.
 |---------------|-----------------------------------------------------------------|
 | `Parameters`  | Title banner + Parameter / Unit / Spec / Actual / Δ / Notes     |
 
-Extend rows for additional parameters; the `Δ` column expects `=E{i}-D{i}` formulas.
+Extend rows for additional parameters; the `Δ` column ships with `=IF(E{i}="","",E{i}-D{i})` so it stays blank until an Actual is entered.
 
 ## Adding a new template
 
 1. Add a `build_xxx()` function in `_build_templates.py`.
 2. Call `save_and_validate(wb, _TEMPLATES_DIR / 'xxx-skeleton.xlsx', recalc=False, raise_on_fail=False)` at the end.
 3. Add an entry to the `builders` list in `main()`.
-4. Rerun `python templates/_build_templates.py`.
+4. Rerun `python templates/_build_templates.py` (it lints every skeleton and exits non-zero on failure).
 5. Confirm `python validate_xlsx.py templates/xxx-skeleton.xlsx --no-recalc` reports `status=pass`.
