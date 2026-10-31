@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install LibreOffice (formula recalc)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libreoffice-calc
+          soffice --version
+
+      - name: Install Python deps
+        run: pip install -r requirements-dev.txt
+
+      - name: Theme + builder smoke
+        run: |
+          python theme.py
+          python build_xlsx.py
+
+      - name: Lint shipped templates
+        run: |
+          for t in templates/*.xlsx; do
+            echo "::group::$t"
+            python validate_xlsx.py "$t" --no-recalc > /tmp/report.json || { cat /tmp/report.json; exit 1; }
+            echo "::endgroup::"
+          done
+
+      - name: Templates rebuild cleanly
+        run: python templates/_build_templates.py
+
+      - name: Regression tests
+        run: python -m pytest -q tests
+
+      - name: Evals + per-theme samples (with recalc)
+        run: python evals/run_evals.py --out eval-out > eval-report.json || { cat eval-report.json; exit 1; }
+
+      - name: Upload eval workbooks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-workbooks
+          path: |
+            eval-out/
+            eval-report.json
+          if-no-files-found: ignore

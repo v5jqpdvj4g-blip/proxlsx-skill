@@ -101,7 +101,13 @@ def load_template(template_name: str, theme: str | None = None) -> Workbook:
     if not path.exists():
         raise FileNotFoundError(f"no template at {path}")
     wb = load_workbook(path)
-    theme = theme or "ib"
+    if theme is None:
+        # Infer the template's own theme from its registered NamedStyles so
+        # e.g. the saas dashboard skeleton isn't silently restyled as ib.
+        names = set(wb.named_styles)
+        theme = next(
+            (t for t in THEMES if style_name(t, "header") in names), "ib"
+        )
     apply_theme(wb, theme)
     wb._xlsx_theme = theme
     return wb
@@ -186,6 +192,7 @@ def write_table(
     total: bool = False,
     total_label: str = "Total",
     label_col: bool = True,
+    col_formats: dict[str, str] | None = None,
 ) -> dict:
     """
     Write a headered table at start_cell. Headers get the 'header' style,
@@ -196,11 +203,19 @@ def write_table(
     applied to every numeric/formula cell — the one place number formats
     enter the pipeline.
 
+    `col_formats` overrides `num_format` per column, keyed by header text,
+    e.g. {'YoY Δ': 'percent_decimal'} so a growth column next to currency
+    columns doesn't render 0.25 as "$0".
+
     Returns {'header_row', 'first_data_row', 'last_data_row', 'last_col'}.
     """
     theme = _theme_of(ws.parent)
     t = get_theme(theme)
-    nf = t["number_formats"][num_format]
+    nfs = t["number_formats"]
+    unknown = set(col_formats or {}) - set(headers)
+    if unknown:
+        raise KeyError(f"col_formats keys not in headers: {sorted(unknown)}")
+    col_nf = [nfs[(col_formats or {}).get(h, num_format)] for h in headers]
     layout = t["layout"]
 
     col0 = ws[start_cell].column          # int
@@ -227,7 +242,7 @@ def write_table(
                 role = _role_for_value(value)
                 # data-role styles all default to currency; override the fmt
                 c.style = style_name(theme, role)
-                c.number_format = nf
+                c.number_format = col_nf[ci]
     last_data = first_data + len(data) - 1
 
     # Optional total row: SUM columns, label in first column
@@ -243,7 +258,7 @@ def write_table(
                 col_letter = _col_letter(col0 + ci)
                 c.value = f"=SUM({col_letter}{first_data}:{col_letter}{last_data})"
                 c.style = style_name(theme, "total")
-                c.number_format = nf
+                c.number_format = col_nf[ci]
         last_data = tr
 
     return {
@@ -388,19 +403,25 @@ def save_and_validate(
 
     validate_script = _SKILL_DIR / "validate_xlsx.py"
     if validate_script.exists():
+        # recalc already ran above (or was explicitly disabled): don't let the
+        # validator launch LibreOffice a second time.
         res = subprocess.run(
-            [sys.executable, str(validate_script), str(path)],
+            [sys.executable, str(validate_script), str(path), "--no-recalc"],
             capture_output=True, text=True,
         )
         try:
             report["validate"] = json.loads(res.stdout)
         except json.JSONDecodeError:
             report["validate"] = {"error": res.stdout + res.stderr}
+    else:
+        report["validate"] = {"error": f"validator missing: {validate_script}"}
 
+    # Fail closed: only an explicit success counts. A crashed validator or a
+    # recalc that could not run used to fall through as ok=True.
     ok = True
-    if report["recalc"] and report["recalc"].get("status") == "errors_found":
+    if recalc and (report["recalc"] or {}).get("status") != "success":
         ok = False
-    if report["validate"] and report["validate"].get("status") == "fail":
+    if (report["validate"] or {}).get("status") != "pass":
         ok = False
     report["ok"] = ok
 

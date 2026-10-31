@@ -448,9 +448,14 @@ def _build_named_styles(theme_name: str) -> list:
 
 def apply_theme(wb, name: str = "ib") -> None:
     """
-    Register all NamedStyles for the theme on the workbook and override
-    the built-in 'Normal' style so un-styled cells still pick up the theme
-    body font. Call once per workbook right after Workbook() / load_workbook().
+    Register all NamedStyles for the theme on the workbook and set the theme
+    body font on the built-in 'Normal' style definition. Call once per
+    workbook right after Workbook() / load_workbook().
+
+    Note: this does NOT restyle cells that never get a style assigned; in
+    openpyxl those keep the workbook default font (Calibri 11). That is why
+    every write must go through build_xlsx helpers, and why validate_xlsx.py
+    flags Calibri 11 on Normal-styled content cells.
     """
     get_theme(name)  # raises if unknown
     registered = {s.name for s in wb._named_styles}

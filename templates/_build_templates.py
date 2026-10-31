@@ -35,6 +35,7 @@ from build_xlsx import (  # noqa: E402
     save_and_validate,
 )
 from theme import default_column_widths  # noqa: E402
+from validate_xlsx import lint  # noqa: E402
 
 _TEMPLATES_DIR = _ROOT / "templates"
 
@@ -78,6 +79,10 @@ def build_financial_model() -> Path:
         ],
         num_format="percent_decimal",
     )
+    # Starting ARR is a dollar figure, not a ratio: 10.0 rendered as "1000.0%".
+    from theme import get_theme as _gt
+    ws.cell(row=info["first_data_row"], column=3).number_format = \
+        _gt("ib")["number_formats"]["currency_decimal"]
     write_source(ws, row=info["last_data_row"] + 2,
                  text="Management model — replace with actuals before use")
 
@@ -109,13 +114,18 @@ def build_data_report() -> Path:
         ws, f"B{r}",
         headers=["Category", "FY23", "FY24", "FY25", "YoY Δ", "CAGR"],
         data=[
-            ["Segment A", 1000, 1200, 1500, "=D{i}/C{i}-1".format(i=r + 1), None],
-            ["Segment B",  500,  520,  550, "=D{i}/C{i}-1".format(i=r + 2), None],
-            ["Segment C",  200,  280,  380, "=D{i}/C{i}-1".format(i=r + 3), None],
+            ["Segment A", 1000, 1200, 1500, "=E{i}/D{i}-1".format(i=r + 1), "=(E{i}/C{i})^(1/2)-1".format(i=r + 1)],
+            ["Segment B",  500,  520,  550, "=E{i}/D{i}-1".format(i=r + 2), "=(E{i}/C{i})^(1/2)-1".format(i=r + 2)],
+            ["Segment C",  200,  280,  380, "=E{i}/D{i}-1".format(i=r + 3), "=(E{i}/C{i})^(1/2)-1".format(i=r + 3)],
         ],
         num_format="currency",
+        col_formats={"YoY Δ": "percent_decimal", "CAGR": "percent_decimal"},
         total=True,
     )
+    # Growth rates don't sum: compute the total row's YoY / CAGR from totals.
+    tr = info["last_data_row"]
+    ws[f"F{tr}"].value = f"=E{tr}/D{tr}-1"
+    ws[f"G{tr}"].value = f"=(E{tr}/C{tr})^(1/2)-1"
     write_note(ws, row=info["last_data_row"] + 2,
                text="Replace segments and periods with your own; formulas will re-calc on open.")
     write_source(ws, row=info["last_data_row"] + 3,
@@ -177,6 +187,11 @@ def build_dashboard() -> Path:
 # Engineering sheet skeleton (engineering)
 # ---------------------------------------------------------------------------
 
+def _delta(i: int) -> str:
+    """Actual - Spec, blank until an Actual is entered."""
+    return f'=IF(E{i}="","",E{i}-D{i})'
+
+
 def build_engineering_sheet() -> Path:
     wb = new_workbook(theme="engineering", first_sheet="Parameters")
     ws = wb["Parameters"]
@@ -189,10 +204,10 @@ def build_engineering_sheet() -> Path:
         ws, f"B{r}",
         headers=["Parameter", "Unit", "Spec", "Actual", "Δ", "Notes"],
         data=[
-            ["Design pressure",   "bar(g)", 35.0, None,  None, None],
-            ["Design temperature", "°C",    150.0, None, None, None],
-            ["Flow rate",         "kg/h",  12000.0, None, None, None],
-            ["Density",           "kg/m³",  815.0, None, None, None],
+            ["Design pressure",    "bar(g)", 35.0,    None, _delta(r + 1), None],
+            ["Design temperature", "°C",     150.0,   None, _delta(r + 2), None],
+            ["Flow rate",          "kg/h",   12000.0, None, _delta(r + 3), None],
+            ["Density",            "kg/m³",  815.0,   None, _delta(r + 4), None],
         ],
         num_format="number_decimal",
     )
@@ -214,9 +229,18 @@ def main() -> None:
         ("dashboard",       build_dashboard),
         ("engineering",     build_engineering_sheet),
     ]
+    failed = []
     for name, fn in builders:
         out = fn()
-        print(f"  built {name:15s} -> {out.relative_to(_ROOT)}")
+        rep = lint(out, run_recalc=False)
+        status = "ok" if rep["status"] == "pass" else "FAIL"
+        print(f"  built {name:15s} -> {out.relative_to(_ROOT)}  [{status}]")
+        if rep["status"] != "pass":
+            failed.append(name)
+    if failed:
+        # Templates used to be written with raise_on_fail=False and nobody
+        # looked at the result; a broken skeleton shipped silently.
+        raise SystemExit(f"template lint failed: {failed}")
 
 
 if __name__ == "__main__":

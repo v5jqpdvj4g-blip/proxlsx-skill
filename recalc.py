@@ -97,8 +97,12 @@ def recalc(filename, timeout=30):
             cmd = [timeout_cmd, str(timeout)] + cmd
     
     result = subprocess.run(cmd, capture_output=True, text=True)
-    
-    if result.returncode != 0 and result.returncode != 124:  # 124 is timeout exit code
+
+    if result.returncode == 124:  # `timeout` killed soffice: file was NOT recalculated
+        return {'error': f'LibreOffice recalculation timed out after {timeout}s; '
+                         'formulas were not recalculated'}
+
+    if result.returncode != 0:
         error_msg = result.stderr or 'Unknown error during recalculation'
         if 'Module1' in error_msg or 'RecalculateAndSave' not in error_msg:
             return {'error': 'LibreOffice macro not configured properly'}
@@ -118,13 +122,13 @@ def recalc(filename, timeout=30):
             # Check ALL rows and columns - no limits
             for row in ws.iter_rows():
                 for cell in row:
-                    if cell.value is not None and isinstance(cell.value, str):
-                        for err in excel_errors:
-                            if err in cell.value:
-                                location = f"{sheet_name}!{cell.coordinate}"
-                                error_details[err].append(location)
-                                total_errors += 1
-                                break
+                    # Cached error values are the bare error literal. Match
+                    # exactly so a note that merely mentions "#N/A" is not
+                    # reported as a formula error.
+                    if isinstance(cell.value, str) and cell.value.strip() in error_details:
+                        location = f"{sheet_name}!{cell.coordinate}"
+                        error_details[cell.value.strip()].append(location)
+                        total_errors += 1
         
         wb.close()
         
