@@ -10,3 +10,7 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+
+# Local agent/plugin state (not project content)
+.anchor/
+.claude/
