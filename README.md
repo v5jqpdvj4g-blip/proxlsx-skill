@@ -99,6 +99,9 @@ pip install openpyxl pandas
 | **Codex CLI** | `~/.codex/skills/xlsx/` | `mkdir -p ~/.codex/skills && ln -s "$(pwd)" ~/.codex/skills/xlsx` |
 | **Gemini CLI** | `~/.gemini/skills/xlsx/` | `mkdir -p ~/.gemini/skills && ln -s "$(pwd)" ~/.gemini/skills/xlsx` |
 
+> [!TIP]
+> Running the skill from Claude Desktop, or want to fence file access to specific folders? See [`mcp/README.md`](./mcp/README.md) for a ready-made filesystem MCP server config (macOS/Linux and Windows variants).
+
 ## Usage
 
 ### 1. Build a financial model from scratch
